@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Panel</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.3/css/bulma.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@2.6.14/dist/vue.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+</head>
+<body>
+    <div id="app">
+        <nav class="navbar" role="navigation" aria-label="main navigation">
+            <div class="navbar-brand">
+                <a class="navbar-item" href="#">
+                    <h1 class="title">Admin Panel</h1>
+                </a>
+            </div>
+            <div class="navbar-end">
+                <div class="navbar-item">
+                    <button class="button is-danger" @click="logout">Logout</button>
+                </div>
+            </div>
+        </nav>
+        <section class="section">
+            <div class="container">
+                <div class="tabs">
+                    <ul>
+                        <li :class="{ 'is-active': activeTab === 'about' }"><a @click="activeTab = 'about'">About</a></li>
+                        <li :class="{ 'is-active': activeTab === 'shodan' }"><a @click="activeTab = 'shodan'">Shodan API Keys</a></li>
+                        <li :class="{ 'is-active': activeTab === 'settings' }"><a @click="activeTab = 'settings'">Settings</a></li>
+                    </ul>
+                </div>
+
+                <div v-show="activeTab === 'about'">
+                    <div class="content">
+                        <h2>About ShodanProxy Admin Panel</h2>
+                        <p>Welcome to the ShodanProxy Admin Panel. This interface allows you to manage various aspects of your ShodanProxy configuration, including API keys, access controls, and admin accounts.</p>
+                        <ul>
+                            <li><strong>Shodan API Keys:</strong> Manage your Shodan API keys for querying the Shodan database.</li>
+                            <li><strong>Blocked Paths:</strong> Configure paths that should be blocked from access.</li>
+                            <li><strong>Allowed IPs:</strong> Specify IP addresses or ranges that are allowed to access the proxy.</li>
+                            <li><strong>Trusted Proxies:</strong> Set up trusted proxy servers for your network.</li>
+                            <li><strong>Admin Account:</strong> Manage the administrator account for this panel.</li>
+                        </ul>
+                        <p>For more information or support, please contact your system administrator.</p>
+                    </div>
+                </div>
+
+                <div v-show="activeTab === 'shodan'">
+                    <div class="field">
+                        <label class="label">Shodan API Keys</label>
+                        <div class="control">
+                            <div class="tags">
+                                <span class="tag is-medium" v-for="(key, index) in shodanKeys" :key="index">
+                                    {{ `{{ key.slice(0, 6) + '*'.repeat(Math.max(0, key.length - 6)) }}` }}
+                                    <button class="delete is-small" @click="deleteShodanKey(key)"></button>
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="field has-addons">
+                        <div class="control is-expanded">
+                            <input class="input" type="text" v-model="newShodanKey" placeholder="Enter new Shodan API key">
+                        </div>
+                        <div class="control">
+                            <button class="button is-info" @click="addShodanKey">Add Key</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div v-show="activeTab === 'settings'">
+                    <div class="field">
+                        <label class="label">Blocked Paths</label>
+                        <div class="control">
+                            <textarea class="textarea" v-model="config.blocked_paths" rows="8"></textarea>
+                        </div>
+                        <p class="help">Enter paths to block, one per line. This will prevent access to these specific paths through the proxy.</p>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Allowed IPs (CIDR format)</label>
+                        <div class="control">
+                            <textarea class="textarea" v-model="config.allowed_ips" rows="5"></textarea>
+                        </div>
+                        <p class="help">Enter IP addresses or ranges in CIDR format, one per line. Only these IPs will be allowed to access the proxy.</p>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Trusted Proxies</label>
+                        <div class="control">
+                            <textarea class="textarea" v-model="config.trusted_proxies" rows="5"></textarea>
+                        </div>
+                        <p class="help">
+                            This option usually doesn't need to be modified. If your server is behind a reverse proxy, enter the IP address of the proxy server here to correctly obtain the visitor's IP address. If not behind a reverse proxy, leave this empty.
+                        </p>
+                        <p class="help">Enter trusted proxy IP addresses, one per line.</p>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Admin Username</label>
+                        <div class="control">
+                            <input class="input" type="text" v-model="config.username" placeholder="New Username">
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="label">Admin Password</label>
+                        <div class="control">
+                            <input class="input" type="password" v-model="config.password" placeholder="New Password">
+                        </div>
+                    </div>
+
+                    <div class="field mt-6">
+                        <div class="control">
+                            <button class="button is-primary" @click="updateConfig">Save Configuration</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <footer class="footer">
+            <div class="content has-text-centered">
+                <p>
+                    <strong>ShodanProxy</strong> by <a href="https://github.com/liuweitao">LIUWEITAO</a>. The source code is licensed
+                    <a href="http://opensource.org/licenses/mit-license.php">MIT</a>.
+                </p>
+                <p>
+                    <a href="https://github.com/liuweitao/shodan-proxy">View on GitHub</a>
+                </p>
+            </div>
+        </footer>
+    </div>
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

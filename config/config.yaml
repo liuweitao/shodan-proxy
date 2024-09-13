@@ -1,0 +1,21 @@
+blocked_paths:
+  - "/shodan/data"
+  - "/org"
+  - "/shodan/alert"
+  - "/notifier"
+  - "/account/profile"
+  - "/api-info"
+
+admin_user:
+  username: ""
+  password: ""
+
+allowed_ips:
+  - "192.168.0.0/16"
+  - "10.0.0.0/8"
+
+trusted_proxies:
+  - "127.0.0.1/32"
+  - "10.0.0.0/8"
+  - "172.16.0.0/12"
+  - "192.168.0.0/16"
