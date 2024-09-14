@@ -2,9 +2,6 @@ FROM golang:1.17-alpine AS builder
 
 WORKDIR /app
 
-# 设置 GOPROXY 环境变量
-ENV GOPROXY=https://goproxy.cn,direct
-
 # 安装 git
 RUN apk add --no-cache git
 
@@ -28,6 +25,9 @@ COPY --from=builder /app/shodan-proxy .
 COPY --from=builder /app/templates ./templates
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/config ./config
+
+# 复制 README-dockerhub.md 到镜像中
+COPY README-dockerhub.md /README.md
 
 EXPOSE 8080
 
