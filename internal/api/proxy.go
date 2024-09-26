@@ -16,6 +16,12 @@ import (
 func ShodanProxy(w http.ResponseWriter, r *http.Request) {
     targetURL, _ := url.Parse("https://api.shodan.io")
 
+    // 检查路径是否被阻止
+    if utils.IsPathBlocked(r.URL.Path) {
+        http.Error(w, "This path is blocked", http.StatusForbidden)
+        return
+    }
+
     // 创建一个新的请求，而不是使用反向代理
     newReq, err := http.NewRequest(r.Method, targetURL.String()+r.URL.Path, nil)
     if err != nil {

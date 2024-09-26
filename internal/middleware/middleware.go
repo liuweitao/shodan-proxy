@@ -6,7 +6,7 @@ import (
 	"shodan-proxy/internal/utils"
 	"shodan-proxy/internal/session"
 	"log"
-	"shodan-proxy/internal/config"  // 添加这行
+	"shodan-proxy/internal/config"
 )
 
 func AuthMiddleware(next http.HandlerFunc) http.HandlerFunc {

@@ -7,8 +7,6 @@ import (
     "github.com/google/uuid"
 )
 
-// ... existing code ...
-
 var (
     sessions = make(map[string]string)
     mutex    sync.RWMutex

@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"  // 添加这行
+	"log"
 	"net/http"
 	"strings"
 	"time"
