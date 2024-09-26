@@ -11,12 +11,27 @@ import (
     "regexp"
 
     "shodan-proxy/internal/utils"
+    "shodan-proxy/pkg/api_paths"
 )
 
 func ShodanProxy(w http.ResponseWriter, r *http.Request) {
     targetURL, _ := url.Parse("https://api.shodan.io")
 
-    // 检查路径是否被阻止
+    // 检查路径是否被允许
+    pathAllowed := false
+    for _, allowedPath := range api_paths.AllowedPaths {
+        if allowedPath.MatchString(r.URL.Path) {
+            pathAllowed = true
+            break
+        }
+    }
+
+    if !pathAllowed {
+        http.Error(w, "This path is not allowed", http.StatusForbidden)
+        return
+    }
+
+    // 检查路径是否被阻止（保留原有的检查）
     if utils.IsPathBlocked(r.URL.Path) {
         http.Error(w, "This path is blocked", http.StatusForbidden)
         return
