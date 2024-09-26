@@ -1,163 +1,95 @@
 package api
 
 import (
+    "bytes"
+    "io"
+    "io/ioutil"
     "log"
     "net/http"
     "net/http/httputil"
     "net/url"
     "regexp"
-    "io/ioutil"
-    "encoding/json"
-    "bytes"  // 添加这一行
-    "compress/gzip"
 
-    "shodan-proxy/pkg/api_paths"
     "shodan-proxy/internal/utils"
 )
 
 func ShodanProxy(w http.ResponseWriter, r *http.Request) {
     targetURL, _ := url.Parse("https://api.shodan.io")
-    proxy := httputil.NewSingleHostReverseProxy(targetURL)
 
-    // 打印原始请求信息
-    log.Printf("Original request method: %s", r.Method)
-    log.Printf("Original request URL: %s", r.URL.String())
-    log.Printf("Original request headers: %v", r.Header)
-
-    path := r.URL.Path
-
-    // 检查路径是否被阻止
-    if utils.IsPathBlocked(path) {
-        log.Printf("Access denied for blocked path: %s", path)
-        http.Error(w, "Access denied", http.StatusForbidden)
+    // 创建一个新的请求，而不是使用反向代理
+    newReq, err := http.NewRequest(r.Method, targetURL.String()+r.URL.Path, nil)
+    if err != nil {
+        http.Error(w, "Error creating request", http.StatusInternalServerError)
         return
     }
 
-    // 检查路径是否在允许列表中
-    allowed := false
-    for _, allowedPath := range api_paths.AllowedPaths {
-        if allowedPath.MatchString(path) {
-            allowed = true
-            break
+    // 复制查询参数
+    newReq.URL.RawQuery = r.URL.RawQuery
+
+    // 如果是 POST 请求，读取并设置请求体
+    if r.Method == "POST" {
+        body, err := ioutil.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, "Error reading request body", http.StatusInternalServerError)
+            return
         }
+        newReq.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+        newReq.ContentLength = int64(len(body))
+        newReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
     }
 
-    if !allowed {
-        log.Printf("Access denied for path not in allowed list: %s", path)
-        http.Error(w, "Access denied", http.StatusForbidden)
-        return
-    }
+    // 设置必要的 headers
+    newReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
 
-    log.Printf("Access allowed for path: %s", path)
-
-    q := r.URL.Query()
+    // 处理 API key
+    q := newReq.URL.Query()
     userKey := q.Get("key")
 
-    if userKey != "" {
-        log.Printf("User provided their own API key")
-        // 选项1：保留用户的key
-        // 不做任何操作，保留用户的key
-
-        // 选项2：覆盖用户的key，但记录警告
-        // apiKey := utils.GetNextKey()
-        // if apiKey == "" {
-        //     log.Printf("No API keys available")
-        //     http.Error(w, "No API keys available", http.StatusServiceUnavailable)
-        //     return
-        // }
-        // log.Printf("Warning: Overriding user-provided API key")
-        // q.Set("key", apiKey)
-    } else {
+    if userKey == "" {
         apiKey := utils.GetNextKey()
         if apiKey == "" {
-            log.Printf("No API keys available")
+            log.Printf("没有可用的 API keys")
             http.Error(w, "No API keys available", http.StatusServiceUnavailable)
             return
         }
         q.Set("key", apiKey)
+        newReq.URL.RawQuery = q.Encode()
+        log.Printf("使用代理的 API key")
+    } else {
+        log.Printf("使用用户提供的 API key")
     }
 
-    r.URL.Scheme = "https"
-    r.URL.Host = targetURL.Host
-    r.Host = targetURL.Host
+    // 打印最终的请求信息
+    requestDump, err := httputil.DumpRequestOut(newReq, false)
+    if err != nil {
+        log.Printf("Error dumping request: %v", err)
+    } else {
+        // 在日志中隐藏 API key
+        loggedRequest := string(requestDump)
+        loggedRequest = regexp.MustCompile(`key=[^&]+`).ReplaceAllString(loggedRequest, "key=REDACTED")
+        log.Printf("Final request to Shodan:\n%s", loggedRequest)
+    }
 
-    // 打印修改后的请求信息
-    log.Printf("Modified request URL: %s", r.URL.String())
-    log.Printf("Modified request headers: %v", r.Header)
+    // 发送请求
+    client := &http.Client{}
+    resp, err := client.Do(newReq)
+    if err != nil {
+        http.Error(w, "Error sending request to Shodan", http.StatusInternalServerError)
+        return
+    }
+    defer resp.Body.Close()
 
-    // 使用自定义的 Director 函数
-    originalDirector := proxy.Director
-    proxy.Director = func(req *http.Request) {
-        originalDirector(req)
-        // 打印最终的请求信息
-        requestDump, err := httputil.DumpRequestOut(req, true)
-        if err != nil {
-            log.Printf("Error dumping request: %v", err)
-        } else {
-            // 在日志中隐藏 API key
-            loggedRequest := string(requestDump)
-            loggedRequest = regexp.MustCompile(`key=[^&]+`).ReplaceAllString(loggedRequest, "key=REDACTED")
-            log.Printf("Final request to Shodan:\n%s", loggedRequest)
+    // 复制响应头
+    for k, vv := range resp.Header {
+        for _, v := range vv {
+            w.Header().Add(k, v)
         }
     }
+    w.WriteHeader(resp.StatusCode)
 
-    // 使用自定义的 ModifyResponse 函数
-    proxy.ModifyResponse = func(resp *http.Response) error {
-        log.Printf("Response Status: %s", resp.Status)
-        log.Printf("Response Headers: %v", resp.Header)
-
-        // 检查响应状态码
-        if resp.StatusCode != http.StatusOK {
-            var body []byte
-            var err error
-
-            // Check if the response is gzip encoded
-            if resp.Header.Get("Content-Encoding") == "gzip" {
-                reader, err := gzip.NewReader(resp.Body)
-                if err != nil {
-                    log.Printf("Error creating gzip reader: %v", err)
-                    return err
-                }
-                defer reader.Close()
-                body, err = ioutil.ReadAll(reader)
-            } else {
-                body, err = ioutil.ReadAll(resp.Body)
-            }
-
-            if err != nil {
-                log.Printf("Error reading response body: %v", err)
-                return err
-            }
-            resp.Body.Close()
-
-            // 解析错误信息
-            var errorResponse struct {
-                Error string `json:"error"`
-            }
-            if err := json.Unmarshal(body, &errorResponse); err != nil {
-                log.Printf("Error parsing error response: %v", err)
-                log.Printf("Raw response body: %s", string(body))
-                errorResponse.Error = "Unknown error occurred"
-            }
-
-            // 创建新的响应
-            newBody, _ := json.Marshal(map[string]interface{}{
-                "error": errorResponse.Error,
-                "status_code": resp.StatusCode,
-            })
-
-            // 设置新的响应
-            resp.Body = ioutil.NopCloser(bytes.NewBuffer(newBody))
-            resp.ContentLength = int64(len(newBody))
-            resp.Header.Set("Content-Type", "application/json")
-            resp.Header.Del("Content-Encoding") // Remove Content-Encoding header
-            resp.StatusCode = http.StatusOK // 将状态码改为 200
-
-            log.Printf("Modified error response: %s", string(newBody))
-        }
-
-        return nil
+    // 复制响应体
+    _, err = io.Copy(w, resp.Body)
+    if err != nil {
+        log.Printf("Error copying response: %v", err)
     }
-
-    proxy.ServeHTTP(w, r)
 }
