@@ -154,9 +154,28 @@ func validateConfig(cfg *config.Config) error {
 
 func HandleHTTPHeaders(w http.ResponseWriter, r *http.Request) {
 	headers := make(map[string]string)
+	
+	// 添加所有请求头
 	for name, values := range r.Header {
 		headers[name] = strings.Join(values, ", ")
 	}
+
+	// 添加一些模拟的 Cloudflare 头部
+	headers["Cf-Visitor"] = "{\"scheme\":\"https\"}"
+	headers["Cf-Request-Id"] = fmt.Sprintf("%x", time.Now().UnixNano())
+	headers["Cdn-Loop"] = "cloudflare"
+	headers["Cf-Ray"] = fmt.Sprintf("%x-DFW", time.Now().UnixNano())
+
+	// 确保某些头部存在，即使为空
+	ensureHeaders := []string{"Content-Length", "Content-Type", "X-Forwarded-For", "X-Forwarded-Proto"}
+	for _, header := range ensureHeaders {
+		if _, exists := headers[header]; !exists {
+			headers[header] = ""
+		}
+	}
+
+	// 设置 Host 为模拟的 Shodan API 主机
+	headers["Host"] = "api.shodan.io"
 
 	jsonResponse, err := json.Marshal(headers)
 	if err != nil {
@@ -170,7 +189,19 @@ func HandleHTTPHeaders(w http.ResponseWriter, r *http.Request) {
 
 func HandleMyIP(w http.ResponseWriter, r *http.Request) {
 	ip := utils.GetClientIP(r)
-	w.Write([]byte(ip))
+	
+	// 创建 JSON 格式的响应
+	jsonResponse, err := json.Marshal(ip)
+	if err != nil {
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	// 设置 Content-Type 头为 application/json
+	w.Header().Set("Content-Type", "application/json")
+	
+	// 写入 JSON 响应
+	w.Write(jsonResponse)
 }
 
 // LogoutHandler handles user logout

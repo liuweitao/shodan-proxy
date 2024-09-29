@@ -59,14 +59,11 @@ func ShodanProxy(w http.ResponseWriter, r *http.Request) {
         newReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
     }
 
-    // 设置必要的 headers
-    newReq.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-
     // 处理 API key
     q := newReq.URL.Query()
     userKey := q.Get("key")
 
-    if userKey == "" {
+    if userKey == "" || userKey == "shodanproxy" {
         apiKey := utils.GetNextKey()
         if apiKey == "" {
             log.Printf("没有可用的 API keys")
@@ -75,7 +72,11 @@ func ShodanProxy(w http.ResponseWriter, r *http.Request) {
         }
         q.Set("key", apiKey)
         newReq.URL.RawQuery = q.Encode()
-        log.Printf("使用代理的 API key")
+        if userKey == "" {
+            log.Printf("用户未提供 API key，使用代理的 API key")
+        } else {
+            log.Printf("用户请求使用代理的 API key")
+        }
     } else {
         log.Printf("使用用户提供的 API key")
     }

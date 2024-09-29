@@ -92,8 +92,26 @@ Shodan 代理是一个基于 Go 语言的代理服务器，用于处理 Shodan A
 
 注意：
 1. 使用本代理时，通常无需在每个请求中包含 API 密钥。代理会自动管理和轮询使用配置的 API 密钥。
-2. 如果在调用时传入了 key 参数（例如：`http://localhost:8080/api-info?key=YOUR_API_KEY`），则代理将使用调用者提供的 key。如果没有传入 key 参数，代理将使用自身配置的 API 密钥。这种灵活性允许用户在需要时使用自己的 API 密钥，同时也能利用代理的密钥管理功能。
+2. 如果在调用时传入了 key 参数，代理的行为如下：
+   - 如果 key 的值为 "shodanproxy" 或未提供 key，代理将使用自身配置的 API 密钥。
+   - 如果提供了其他 key 值（例如：`http://localhost:8080/api-info?key=YOUR_API_KEY`），代理将使用调用者提供的 key。
+   这种灵活性允许用户在需要时使用自己的 API 密钥，同时也能利用代理的密钥管理功能。
 3. 出于安全考虑，建议在受控环境中使用此代理服务器，不要将其直接暴露在公共互联网上。
+
+### Shodan CLI 集成
+
+要在 Shodan CLI 中使用 Shodan 代理，您可以修改 Shodan 客户端库的 API 地址。执行以下命令：
+
+```bash
+sed -i 's|https://api.shodan.io|http://your-shodan-proxy-address:port|g' ~/.local/lib/python3.9/site-packages/shodan/client.py
+```
+
+注意：
+- 请将 "your-shodan-proxy-address:port" 替换为您实际部署 Shodan 代理的地址和端口。例如：`http://localhost:8080` 或 `http://192.168.1.100:8080`。
+- 路径 `~/.local/lib/python3.9/site-packages/shodan/client.py` 可能因您的 Python 安装方式而有所不同。请确保使用正确的路径。
+- 执行此命令后，Shodan CLI 将使用您的 Shodan 代理服务器而不是官方 API。
+
+执行此修改后，您可以像往常一样使用 Shodan CLI，但所有请求都将通过您的代理服务器进行路由。
 
 ## 安全注意事项
 
