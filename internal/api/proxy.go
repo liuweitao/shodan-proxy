@@ -2,7 +2,6 @@ package api
 
 import (
     "bytes"
-    "io"
     "io/ioutil"
     "log"
     "net/http"
