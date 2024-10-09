@@ -33,22 +33,39 @@ func GetClientIP(r *http.Request) string {
 	config.ConfigMutex.RLock()
 	defer config.ConfigMutex.RUnlock()
 
+	// 首先获取直接连接的 IP
+	remoteIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+
 	// 检查 X-Forwarded-For 头
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
 		ips := strings.Split(xff, ",")
-		if len(ips) > 0 {
-			return strings.TrimSpace(ips[0])
+		// 从右到左遍历 IP 列表
+		for i := len(ips) - 1; i >= 0; i-- {
+			ip := strings.TrimSpace(ips[i])
+			// 如果这个 IP 不是受信任的代理，就返回它
+			if !isIPTrusted(ip) {
+				return ip
+			}
 		}
 	}
 
 	// 检查 X-Real-IP 头
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
+	if xrip := r.Header.Get("X-Real-IP"); xrip != "" && isIPTrusted(remoteIP) {
 		return xrip
 	}
 
-	// 如果上述头部都不存在，使用 RemoteAddr
-	ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-	return ip
+	// 如果没有找到可信的客户端 IP，返回直接连接的 IP
+	return remoteIP
+}
+
+func isIPTrusted(ip string) bool {
+	for _, trustedProxy := range config.GlobalConfig.TrustedProxies {
+		_, ipNet, err := net.ParseCIDR(trustedProxy)
+		if err == nil && ipNet.Contains(net.ParseIP(ip)) {
+			return true
+		}
+	}
+	return false
 }
 
 func IsPathBlocked(path string) bool {
@@ -81,12 +98,7 @@ func IsIPTrusted(ip string) bool {
 	config.ConfigMutex.RLock()
 	defer config.ConfigMutex.RUnlock()
 
-	for _, trustedProxy := range config.GlobalConfig.TrustedProxies {
-		if strings.HasPrefix(ip, trustedProxy) {
-			return true
-		}
-	}
-	return false
+	return isIPTrusted(ip)
 }
 
 func IsIPAllowed(ip string) bool {

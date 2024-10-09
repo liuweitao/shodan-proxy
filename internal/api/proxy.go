@@ -9,6 +9,8 @@ import (
     "net/http/httputil"
     "net/url"
     "regexp"
+    "strings"
+    "encoding/json"
 
     "shodan-proxy/internal/utils"
     "shodan-proxy/pkg/api_paths"
@@ -109,9 +111,54 @@ func ShodanProxy(w http.ResponseWriter, r *http.Request) {
     }
     w.WriteHeader(resp.StatusCode)
 
-    // 复制响应体
-    _, err = io.Copy(w, resp.Body)
+    // 读取响应体
+    body, err := ioutil.ReadAll(resp.Body)
     if err != nil {
-        log.Printf("Error copying response: %v", err)
+        log.Printf("Error reading response body: %v", err)
+        http.Error(w, "Error reading response from Shodan", http.StatusInternalServerError)
+        return
+    }
+
+    // 如果Content-Type是JSON，尝试替换API key
+    contentType := resp.Header.Get("Content-Type")
+    if strings.Contains(contentType, "application/json") {
+        // 将响应体解析为JSON
+        var jsonBody interface{}
+        err = json.Unmarshal(body, &jsonBody)
+        if err == nil {
+            // 递归替换JSON中的API key
+            replaceAPIKey(jsonBody, userKey)
+            // 重新编码JSON
+            body, err = json.Marshal(jsonBody)
+            if err != nil {
+                log.Printf("Error re-encoding JSON: %v", err)
+            }
+        } else {
+            log.Printf("Error parsing JSON response: %v", err)
+        }
+    }
+
+    // 写入修改后的响应体
+    _, err = w.Write(body)
+    if err != nil {
+        log.Printf("Error writing response: %v", err)
+    }
+}
+
+// 递归替换JSON中的API key
+func replaceAPIKey(v interface{}, newKey string) {
+    switch vv := v.(type) {
+    case map[string]interface{}:
+        for k, v := range vv {
+            if k == "api_key" {
+                vv[k] = newKey
+            } else {
+                replaceAPIKey(v, newKey)
+            }
+        }
+    case []interface{}:
+        for _, v := range vv {
+            replaceAPIKey(v, newKey)
+        }
     }
 }
